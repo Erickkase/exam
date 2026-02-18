@@ -162,11 +162,87 @@ resource "aws_instance" "postgres" {
   
   vpc_security_group_ids = [aws_security_group.postgres_sg.id]
   
-  user_data = base64encode(templatefile("${path.module}/user-data-postgres.sh", {
-    db_name     = var.db_name
-    db_username = var.db_username
-    db_password = var.db_password
-  }))
+  user_data = base64encode(<<-EOF
+    #!/bin/bash
+    exec > >(tee /var/log/user-data.log)
+    exec 2>&1
+    set -x
+    
+    echo "=========================================="
+    echo "Starting PostgreSQL instance setup..."
+    echo "Time: $(date)"
+    echo "=========================================="
+    
+    # Update and install Docker
+    yum update -y || echo "Warning: yum update failed"
+    yum install -y docker
+    systemctl start docker
+    systemctl enable docker
+    sleep 5
+    usermod -aG docker ec2-user
+    
+    # Install Docker Compose
+    curl -L "https://github.com/docker/compose/releases/download/v2.24.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+    chmod +x /usr/local/bin/docker-compose
+    
+    # Create PostgreSQL directory
+    mkdir -p /opt/postgres
+    cd /opt/postgres
+    
+    # Create init SQL file
+    cat > init-db.sql << 'SQLEOF'
+    CREATE SCHEMA IF NOT EXISTS users_schema;
+    CREATE SCHEMA IF NOT EXISTS orders_schema;
+    CREATE SCHEMA IF NOT EXISTS notifications_schema;
+    
+    GRANT ALL PRIVILEGES ON SCHEMA users_schema TO ${var.db_username};
+    GRANT ALL PRIVILEGES ON SCHEMA orders_schema TO ${var.db_username};
+    GRANT ALL PRIVILEGES ON SCHEMA notifications_schema TO ${var.db_username};
+    
+    ALTER DATABASE ${var.db_name} SET search_path TO users_schema, orders_schema, notifications_schema, public;
+    SQLEOF
+    
+    # Create docker-compose.yml
+    cat > docker-compose.yml << 'COMPOSEEOF'
+    version: '3.8'
+    services:
+      postgres:
+        image: postgres:17.2-alpine
+        container_name: postgres-db
+        restart: unless-stopped
+        ports:
+          - "5432:5432"
+        environment:
+          POSTGRES_DB: ${var.db_name}
+          POSTGRES_USER: ${var.db_username}
+          POSTGRES_PASSWORD: ${var.db_password}
+          POSTGRES_INITDB_ARGS: "--encoding=UTF-8"
+        volumes:
+          - postgres_data:/var/lib/postgresql/data
+          - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+        healthcheck:
+          test: ["CMD-SHELL", "pg_isready -U ${var.db_username} -d ${var.db_name}"]
+          interval: 10s
+          timeout: 5s
+          retries: 5
+    volumes:
+      postgres_data:
+        driver: local
+    COMPOSEEOF
+    
+    # Start PostgreSQL
+    /usr/local/bin/docker-compose pull
+    /usr/local/bin/docker-compose up -d
+    
+    sleep 30
+    /usr/local/bin/docker-compose ps
+    
+    echo "=========================================="
+    echo "PostgreSQL setup completed!"
+    echo "Time: $(date)"
+    echo "=========================================="
+    EOF
+  )
   
   root_block_device {
     volume_type = "gp2"
@@ -421,13 +497,45 @@ resource "aws_launch_template" "ms_users_lt" {
 
   vpc_security_group_ids = [aws_security_group.microservices_sg.id]
 
-  user_data = base64encode(templatefile("${path.module}/user-data-users.sh", {
-    docker_image     = "${var.docker_hub_username}/ms-users:${var.image_tag}"
-    db_url           = "jdbc:postgresql://$${aws_instance.postgres.private_ip}:5432/$${var.db_name}?currentSchema=users_schema"
-    db_username      = var.db_username
-    db_password      = var.db_password
-    db_name          = var.db_name
-  }))
+  user_data = base64encode(<<-EOF
+    #!/bin/bash
+    exec > >(tee /var/log/user-data.log)
+    exec 2>&1
+    set -x
+    
+    echo "Starting ms-users setup at $(date)"
+    
+    # Install Docker
+    yum update -y || true
+    yum install -y docker
+    systemctl start docker
+    systemctl enable docker
+    sleep 5
+    usermod -aG docker ec2-user
+    
+    # Pull and run ms-users container
+    docker pull ${var.docker_hub_username}/ms-users:${var.image_tag}
+    
+    # Wait for PostgreSQL
+    sleep 60
+    
+    docker run -d \
+      --name ms-users \
+      --restart unless-stopped \
+      -p 8081:8081 \
+      -e SERVER_PORT=8081 \
+      -e DATABASE_URL="jdbc:postgresql://${aws_instance.postgres.private_ip}:5432/${var.db_name}?currentSchema=users_schema" \
+      -e DATABASE_USERNAME="${var.db_username}" \
+      -e DATABASE_PASSWORD="${var.db_password}" \
+      -e JPA_DDL_AUTO=update \
+      -e JPA_SHOW_SQL=false \
+      -e LOG_LEVEL=INFO \
+      ${var.docker_hub_username}/ms-users:${var.image_tag}
+    
+    echo "ms-users started at $(date)"
+    docker ps
+    EOF
+  )
 
   tag_specifications {
     resource_type = "instance"
@@ -447,13 +555,46 @@ resource "aws_launch_template" "ms_orders_lt" {
 
   vpc_security_group_ids = [aws_security_group.microservices_sg.id]
 
-  user_data = base64encode(templatefile("${path.module}/user-data-orders.sh", {
-    docker_image     = "${var.docker_hub_username}/ms-orders:${var.image_tag}"
-    db_url           = "jdbc:postgresql://$${aws_instance.postgres.private_ip}:5432/$${var.db_name}?currentSchema=orders_schema"
-    db_username      = var.db_username
-    db_password      = var.db_password
-    users_service_url = "http://${aws_lb.main_alb.dns_name}/api/users"
-  }))
+  user_data = base64encode(<<-EOF
+    #!/bin/bash
+    exec > >(tee /var/log/user-data.log)
+    exec 2>&1
+    set -x
+    
+    echo "Starting ms-orders setup at $(date)"
+    
+    # Install Docker
+    yum update -y || true
+    yum install -y docker
+    systemctl start docker
+    systemctl enable docker
+    sleep 5
+    usermod -aG docker ec2-user
+    
+    # Pull and run ms-orders container
+    docker pull ${var.docker_hub_username}/ms-orders:${var.image_tag}
+    
+    # Wait for dependencies
+    sleep 60
+    
+    docker run -d \
+      --name ms-orders \
+      --restart unless-stopped \
+      -p 8082:8082 \
+      -e SERVER_PORT=8082 \
+      -e DATABASE_URL="jdbc:postgresql://${aws_instance.postgres.private_ip}:5432/${var.db_name}?currentSchema=orders_schema" \
+      -e DATABASE_USERNAME="${var.db_username}" \
+      -e DATABASE_PASSWORD="${var.db_password}" \
+      -e USER_SERVICE_URL="http://${aws_lb.main_alb.dns_name}/api/users" \
+      -e JPA_DDL_AUTO=update \
+      -e JPA_SHOW_SQL=false \
+      -e LOG_LEVEL=INFO \
+      ${var.docker_hub_username}/ms-orders:${var.image_tag}
+    
+    echo "ms-orders started at $(date)"
+    docker ps
+    EOF
+  )
 
   tag_specifications {
     resource_type = "instance"
@@ -473,12 +614,45 @@ resource "aws_launch_template" "ms_notifications_lt" {
 
   vpc_security_group_ids = [aws_security_group.microservices_sg.id]
 
-  user_data = base64encode(templatefile("${path.module}/user-data-notifications.sh", {
-    docker_image     = "${var.docker_hub_username}/ms-notifications:${var.image_tag}"
-    db_url           = "jdbc:postgresql://$${aws_instance.postgres.private_ip}:5432/$${var.db_name}?currentSchema=notifications_schema"
-    db_username      = var.db_username
-    db_password      = var.db_password
-  }))
+  user_data = base64encode(<<-EOF
+    #!/bin/bash
+    exec > >(tee /var/log/user-data.log)
+    exec 2>&1
+    set -x
+    
+    echo "Starting ms-notifications setup at $(date)"
+    
+    # Install Docker
+    yum update -y || true
+    yum install -y docker
+    systemctl start docker
+    systemctl enable docker
+    sleep 5
+    usermod -aG docker ec2-user
+    
+    # Pull and run ms-notifications container
+    docker pull ${var.docker_hub_username}/ms-notifications:${var.image_tag}
+    
+    # Wait for PostgreSQL
+    sleep 60
+    
+    docker run -d \
+      --name ms-notifications \
+      --restart unless-stopped \
+      -p 8083:8083 \
+      -e SERVER_PORT=8083 \
+      -e DATABASE_URL="jdbc:postgresql://${aws_instance.postgres.private_ip}:5432/${var.db_name}?currentSchema=notifications_schema" \
+      -e DATABASE_USERNAME="${var.db_username}" \
+      -e DATABASE_PASSWORD="${var.db_password}" \
+      -e JPA_DDL_AUTO=update \
+      -e JPA_SHOW_SQL=false \
+      -e LOG_LEVEL=INFO \
+      ${var.docker_hub_username}/ms-notifications:${var.image_tag}
+    
+    echo "ms-notifications started at $(date)"
+    docker ps
+    EOF
+  )
 
   tag_specifications {
     resource_type = "instance"

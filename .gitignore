@@ -58,6 +58,11 @@ infra/main-old.tf.backup
 infra/variables-old.tf.backup
 infra/outputs-old.tf.backup
 
+# User-data scripts (now inline in Terraform)
+infra/user-data-*.sh
+infra/check-instance-health.sh
+infra/docker-compose-postgres.yml
+
 ### Private Keys ###
 *.pem
 *.key
@@ -77,3 +82,4 @@ Proyecto_Microservicios_Java_Examen.md
 README.md
 infra/ESTRUCTURA-LIMPIA.md
 infra/TROUBLESHOOTING.md
+infra/USER-DATA-INLINE.md
