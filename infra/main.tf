@@ -385,6 +385,7 @@ resource "aws_launch_template" "ms_users_lt" {
     db_url           = "jdbc:postgresql://${aws_db_instance.postgres.endpoint}/${var.db_name}?currentSchema=users_schema"
     db_username      = var.db_username
     db_password      = var.db_password
+    db_name          = var.db_name
   }))
 
   tag_specifications {
