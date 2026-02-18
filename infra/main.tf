@@ -175,11 +175,11 @@ resource "aws_instance" "postgres" {
     
     # Update system
     echo "[1/6] Updating system..."
-    yum update -y || echo "Warning: yum update failed but continuing..."
+    apt-get update -y
     
     # Install Docker
     echo "[2/6] Installing Docker..."
-    yum install -y docker
+    apt-get install -y docker.io
     if [ $? -ne 0 ]; then
       echo "ERROR: Failed to install Docker"
       exit 1
@@ -198,7 +198,7 @@ resource "aws_instance" "postgres" {
       exit 1
     fi
     
-    usermod -aG docker ec2-user
+    usermod -aG docker ubuntu
     docker --version
     echo "Docker installed and running successfully!"
     
@@ -559,12 +559,12 @@ resource "aws_launch_template" "ms_users_lt" {
     echo "Starting ms-users setup at $(date)"
     
     # Install Docker
-    yum update -y || true
-    yum install -y docker
+    apt-get update -y
+    apt-get install -y docker.io
     systemctl start docker
     systemctl enable docker
     sleep 5
-    usermod -aG docker ec2-user
+    usermod -aG docker ubuntu
     
     # Pull and run ms-users container
     docker pull ${var.docker_hub_username}/ms-users:${var.image_tag}
@@ -617,12 +617,12 @@ resource "aws_launch_template" "ms_orders_lt" {
     echo "Starting ms-orders setup at $(date)"
     
     # Install Docker
-    yum update -y || true
-    yum install -y docker
+    apt-get update -y
+    apt-get install -y docker.io
     systemctl start docker
     systemctl enable docker
     sleep 5
-    usermod -aG docker ec2-user
+    usermod -aG docker ubuntu
     
     # Pull and run ms-orders container
     docker pull ${var.docker_hub_username}/ms-orders:${var.image_tag}
@@ -676,12 +676,12 @@ resource "aws_launch_template" "ms_notifications_lt" {
     echo "Starting ms-notifications setup at $(date)"
     
     # Install Docker
-    yum update -y || true
-    yum install -y docker
+    apt-get update -y
+    apt-get install -y docker.io
     systemctl start docker
     systemctl enable docker
     sleep 5
-    usermod -aG docker ec2-user
+    usermod -aG docker ubuntu
     
     # Pull and run ms-notifications container
     docker pull ${var.docker_hub_username}/ms-notifications:${var.image_tag}
