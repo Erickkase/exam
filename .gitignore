@@ -45,13 +45,15 @@ logs/
 
 ### Terraform ###
 **/.terraform/
-**/.terraform.lock.hcl
-**/terraform.tfstate
-**/terraform.tfstate.backup
+# NOTE: Terraform state files are normally ignored for security,
+# but we're tracking them for this exam project to maintain state between GitHub Actions runs
+# **/.terraform.lock.hcl
+# **/terraform.tfstate
+# **/terraform.tfstate.backup
 **/*.tfvars
 infra/.terraform/
-infra/terraform.tfstate*
-infra/.terraform.lock.hcl
+# infra/terraform.tfstate*
+# infra/.terraform.lock.hcl
 infra/main-old.tf.backup
 infra/variables-old.tf.backup
 infra/outputs-old.tf.backup

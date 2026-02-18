@@ -144,7 +144,7 @@ resource "aws_db_subnet_group" "postgres_subnet_group" {
 resource "aws_db_instance" "postgres" {
   identifier             = "microservicios-db"
   engine                 = "postgres"
-  engine_version         = "16.1"
+  engine_version         = "16.4"
   instance_class         = "db.t3.micro"
   allocated_storage      = 20
   storage_type           = "gp2"
@@ -202,10 +202,14 @@ resource "aws_lb_listener" "http" {
 
 # Target Group - ms-users (port 8081)
 resource "aws_lb_target_group" "ms_users_tg" {
-  name     = "ms-users-tg"
+  name_prefix = "msu-"
   port     = 8081
   protocol = "HTTP"
   vpc_id   = var.vpc_id
+  
+  lifecycle {
+    create_before_destroy = true
+  }
   
   health_check {
     enabled             = true
@@ -228,10 +232,14 @@ resource "aws_lb_target_group" "ms_users_tg" {
 
 # Target Group - ms-orders (port 8082)
 resource "aws_lb_target_group" "ms_orders_tg" {
-  name     = "ms-orders-tg"
+  name_prefix = "mso-"
   port     = 8082
   protocol = "HTTP"
   vpc_id   = var.vpc_id
+  
+  lifecycle {
+    create_before_destroy = true
+  }
   
   health_check {
     enabled             = true
@@ -254,10 +262,14 @@ resource "aws_lb_target_group" "ms_orders_tg" {
 
 # Target Group - ms-notifications (port 8083)
 resource "aws_lb_target_group" "ms_notifications_tg" {
-  name     = "ms-notifications-tg"
+  name_prefix = "msn-"
   port     = 8083
   protocol = "HTTP"
   vpc_id   = var.vpc_id
+  
+  lifecycle {
+    create_before_destroy = true
+  }
   
   health_check {
     enabled             = true
@@ -345,6 +357,10 @@ resource "tls_private_key" "ms_users_key" {
 resource "aws_key_pair" "ms_users" {
   key_name   = "ms-users-key"
   public_key = tls_private_key.ms_users_key.public_key_openssh
+  
+  lifecycle {
+    ignore_changes = [public_key]
+  }
 }
 
 resource "tls_private_key" "ms_orders_key" {
@@ -355,6 +371,10 @@ resource "tls_private_key" "ms_orders_key" {
 resource "aws_key_pair" "ms_orders" {
   key_name   = "ms-orders-key"
   public_key = tls_private_key.ms_orders_key.public_key_openssh
+  
+  lifecycle {
+    ignore_changes = [public_key]
+  }
 }
 
 resource "tls_private_key" "ms_notifications_key" {
@@ -365,6 +385,10 @@ resource "tls_private_key" "ms_notifications_key" {
 resource "aws_key_pair" "ms_notifications" {
   key_name   = "ms-notifications-key"
   public_key = tls_private_key.ms_notifications_key.public_key_openssh
+  
+  lifecycle {
+    ignore_changes = [public_key]
+  }
 }
 
 # ============================================================

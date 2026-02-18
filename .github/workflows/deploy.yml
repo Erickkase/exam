@@ -230,6 +230,23 @@ jobs:
           echo "## 🚀 Deployment Summary"
           terraform output deployment_summary
 
+      - name: Commit Terraform State
+        run: |
+          cd ..
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Add terraform state files
+          git add infra/terraform.tfstate || true
+          git add infra/terraform.tfstate.backup || true
+          git add infra/.terraform.lock.hcl || true
+          
+          # Commit if there are changes
+          git diff --staged --quiet || git commit -m "Update Terraform state after deployment [skip ci]"
+          
+          # Push changes
+          git push origin main || echo "No changes to push"
+
   # ============================================================
   # JOB 3: TRACKEAR Y ACTUALIZAR INSTANCIAS
   # ============================================================
