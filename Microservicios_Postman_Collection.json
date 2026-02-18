@@ -1,0 +1,610 @@
+{
+	"info": {
+		"_postman_id": "microservicios-examen-2026",
+		"name": "Microservicios - Examen CRUD",
+		"description": "Colección completa de endpoints CRUD para ms-users, ms-orders y ms-notifications",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "ms-users (Puerto 8081)",
+			"item": [
+				{
+					"name": "CREATE - Crear Usuario",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Juan Pérez\",\n  \"email\": \"juan@example.com\"\n}"
+						},
+						"url": {
+							"raw": "http://localhost:8081/api/users",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8081",
+							"path": [
+								"api",
+								"users"
+							]
+						}
+					}
+				},
+				{
+					"name": "READ - Listar Todos los Usuarios",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8081/api/users",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8081",
+							"path": [
+								"api",
+								"users"
+							]
+						}
+					}
+				},
+				{
+					"name": "READ - Obtener Usuario por ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8081/api/users/1",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8081",
+							"path": [
+								"api",
+								"users",
+								"1"
+							]
+						}
+					}
+				},
+				{
+					"name": "UPDATE - Actualizar Usuario",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Juan Pérez Actualizado\",\n  \"email\": \"juan.perez@example.com\"\n}"
+						},
+						"url": {
+							"raw": "http://localhost:8081/api/users/1",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8081",
+							"path": [
+								"api",
+								"users",
+								"1"
+							]
+						}
+					}
+				},
+				{
+					"name": "DELETE - Eliminar Usuario",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8081/api/users/1",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8081",
+							"path": [
+								"api",
+								"users",
+								"1"
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "ms-orders (Puerto 8082)",
+			"item": [
+				{
+					"name": "CREATE - Crear Orden",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"userId\": 1,\n  \"total\": 150.50\n}"
+						},
+						"url": {
+							"raw": "http://localhost:8082/api/orders",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8082",
+							"path": [
+								"api",
+								"orders"
+							]
+						}
+					}
+				},
+				{
+					"name": "READ - Listar Todas las Órdenes",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8082/api/orders",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8082",
+							"path": [
+								"api",
+								"orders"
+							]
+						}
+					}
+				},
+				{
+					"name": "READ - Obtener Orden por ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8082/api/orders/1",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8082",
+							"path": [
+								"api",
+								"orders",
+								"1"
+							]
+						}
+					}
+				},
+				{
+					"name": "UPDATE - Actualizar Orden",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"userId\": 1,\n  \"total\": 300.00\n}"
+						},
+						"url": {
+							"raw": "http://localhost:8082/api/orders/1",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8082",
+							"path": [
+								"api",
+								"orders",
+								"1"
+							]
+						}
+					}
+				},
+				{
+					"name": "DELETE - Eliminar Orden",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8082/api/orders/1",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8082",
+							"path": [
+								"api",
+								"orders",
+								"1"
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "ms-notifications (Puerto 8083)",
+			"item": [
+				{
+					"name": "CREATE - Crear Notificación",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"userId\": 1,\n  \"orderId\": 1,\n  \"message\": \"Tu orden #1 ha sido creada exitosamente\",\n  \"type\": \"ORDER_CREATED\"\n}"
+						},
+						"url": {
+							"raw": "http://localhost:8083/api/notifications",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8083",
+							"path": [
+								"api",
+								"notifications"
+							]
+						}
+					}
+				},
+				{
+					"name": "READ - Listar Todas las Notificaciones",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8083/api/notifications",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8083",
+							"path": [
+								"api",
+								"notifications"
+							]
+						}
+					}
+				},
+				{
+					"name": "READ - Obtener Notificación por ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8083/api/notifications/1",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8083",
+							"path": [
+								"api",
+								"notifications",
+								"1"
+							]
+						}
+					}
+				},
+				{
+					"name": "UPDATE - Actualizar Notificación",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"userId\": 1,\n  \"orderId\": 1,\n  \"message\": \"Mensaje actualizado: Tu orden ha sido procesada\",\n  \"type\": \"ORDER_UPDATED\"\n}"
+						},
+						"url": {
+							"raw": "http://localhost:8083/api/notifications/1",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8083",
+							"path": [
+								"api",
+								"notifications",
+								"1"
+							]
+						}
+					}
+				},
+				{
+					"name": "DELETE - Eliminar Notificación",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8083/api/notifications/1",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8083",
+							"path": [
+								"api",
+								"notifications",
+								"1"
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Flujo Completo",
+			"item": [
+				{
+					"name": "1. Crear Usuario Ana Torres",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Ana Torres\",\n  \"email\": \"ana@example.com\"\n}"
+						},
+						"url": {
+							"raw": "http://localhost:8081/api/users",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8081",
+							"path": [
+								"api",
+								"users"
+							]
+						}
+					}
+				},
+				{
+					"name": "2. Crear Usuario María García",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"María García\",\n  \"email\": \"maria@example.com\"\n}"
+						},
+						"url": {
+							"raw": "http://localhost:8081/api/users",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8081",
+							"path": [
+								"api",
+								"users"
+							]
+						}
+					}
+				},
+				{
+					"name": "3. Listar Todos los Usuarios",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8081/api/users",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8081",
+							"path": [
+								"api",
+								"users"
+							]
+						}
+					}
+				},
+				{
+					"name": "4. Crear Orden para Usuario 1",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"userId\": 1,\n  \"total\": 199.99\n}"
+						},
+						"url": {
+							"raw": "http://localhost:8082/api/orders",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8082",
+							"path": [
+								"api",
+								"orders"
+							]
+						}
+					}
+				},
+				{
+					"name": "5. Actualizar Orden",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"userId\": 1,\n  \"total\": 299.99\n}"
+						},
+						"url": {
+							"raw": "http://localhost:8082/api/orders/1",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8082",
+							"path": [
+								"api",
+								"orders",
+								"1"
+							]
+						}
+					}
+				},
+				{
+					"name": "6. Crear Notificación",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"userId\": 1,\n  \"orderId\": 1,\n  \"message\": \"Tu orden por $299.99 ha sido actualizada\",\n  \"type\": \"ORDER_UPDATED\"\n}"
+						},
+						"url": {
+							"raw": "http://localhost:8083/api/notifications",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8083",
+							"path": [
+								"api",
+								"notifications"
+							]
+						}
+					}
+				},
+				{
+					"name": "7. Listar Notificaciones",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8083/api/notifications",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8083",
+							"path": [
+								"api",
+								"notifications"
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Casos de Error",
+			"item": [
+				{
+					"name": "ERROR - Crear Orden con Usuario Inexistente",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"userId\": 999,\n  \"total\": 150.50\n}"
+						},
+						"url": {
+							"raw": "http://localhost:8082/api/orders",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8082",
+							"path": [
+								"api",
+								"orders"
+							]
+						}
+					}
+				},
+				{
+					"name": "ERROR - Obtener Usuario que No Existe",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8081/api/users/999",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8081",
+							"path": [
+								"api",
+								"users",
+								"999"
+							]
+						}
+					}
+				}
+			]
+		}
+	]
+}

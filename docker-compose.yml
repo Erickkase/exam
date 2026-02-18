@@ -1,0 +1,103 @@
+version: '3.8'
+
+services:
+  # Base de datos PostgreSQL única
+  postgres:
+    image: postgres:16-alpine
+    container_name: microservices_postgres
+    environment:
+      POSTGRES_DB: microservices_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    networks:
+      - microservices-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d microservices_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Microservicio Users
+  ms-users:
+    build:
+      context: ./services/users
+      dockerfile: Dockerfile
+    container_name: ms-users
+    environment:
+      SERVER_PORT: 8081
+      DATABASE_URL: jdbc:postgresql://postgres:5432/microservices_db?currentSchema=users_schema
+      DATABASE_USERNAME: postgres
+      DATABASE_PASSWORD: postgres
+      JPA_DDL_AUTO: update
+      JPA_SHOW_SQL: "true"
+      LOG_LEVEL: INFO
+    ports:
+      - "8081:8081"
+    networks:
+      - microservices-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: on-failure
+
+  # Microservicio Orders
+  ms-orders:
+    build:
+      context: ./services/orders
+      dockerfile: Dockerfile
+    container_name: ms-orders
+    environment:
+      SERVER_PORT: 8082
+      DATABASE_URL: jdbc:postgresql://postgres:5432/microservices_db?currentSchema=orders_schema
+      DATABASE_USERNAME: postgres
+      DATABASE_PASSWORD: postgres
+      USER_SERVICE_URL: http://ms-users:8081
+      JPA_DDL_AUTO: update
+      JPA_SHOW_SQL: "true"
+      LOG_LEVEL: INFO
+    ports:
+      - "8082:8082"
+    networks:
+      - microservices-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ms-users:
+        condition: service_started
+    restart: on-failure
+
+  # Microservicio Notifications
+  ms-notifications:
+    build:
+      context: ./services/notifications
+      dockerfile: Dockerfile
+    container_name: ms-notifications
+    environment:
+      SERVER_PORT: 8083
+      DATABASE_URL: jdbc:postgresql://postgres:5432/microservices_db?currentSchema=notifications_schema
+      DATABASE_USERNAME: postgres
+      DATABASE_PASSWORD: postgres
+      JPA_DDL_AUTO: update
+      JPA_SHOW_SQL: "true"
+      LOG_LEVEL: INFO
+    ports:
+      - "8083:8083"
+    networks:
+      - microservices-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: on-failure
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  microservices-network:
+    driver: bridge
