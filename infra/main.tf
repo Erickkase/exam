@@ -173,72 +173,125 @@ resource "aws_instance" "postgres" {
     echo "Time: $(date)"
     echo "=========================================="
     
-    # Update and install Docker
-    yum update -y || echo "Warning: yum update failed"
+    # Update system
+    echo "[1/6] Updating system..."
+    yum update -y || echo "Warning: yum update failed but continuing..."
+    
+    # Install Docker
+    echo "[2/6] Installing Docker..."
     yum install -y docker
+    if [ $? -ne 0 ]; then
+      echo "ERROR: Failed to install Docker"
+      exit 1
+    fi
+    
+    # Start Docker service
+    echo "[3/6] Starting Docker service..."
     systemctl start docker
     systemctl enable docker
     sleep 5
+    
+    # Verify Docker is running
+    if ! docker ps > /dev/null 2>&1; then
+      echo "ERROR: Docker is not running properly"
+      systemctl status docker
+      exit 1
+    fi
+    
     usermod -aG docker ec2-user
+    docker --version
+    echo "Docker installed and running successfully!"
     
     # Install Docker Compose
+    echo "[4/6] Installing Docker Compose..."
     curl -L "https://github.com/docker/compose/releases/download/v2.24.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
     chmod +x /usr/local/bin/docker-compose
+    /usr/local/bin/docker-compose --version
     
     # Create PostgreSQL directory
+    echo "[5/6] Creating PostgreSQL configuration..."
     mkdir -p /opt/postgres
     cd /opt/postgres
     
-    # Create init SQL file
-    cat > init-db.sql << 'SQLEOF'
-    CREATE SCHEMA IF NOT EXISTS users_schema;
-    CREATE SCHEMA IF NOT EXISTS orders_schema;
-    CREATE SCHEMA IF NOT EXISTS notifications_schema;
+    # Create init SQL file (using cat without quotes to allow variable expansion)
+    cat > init-db.sql << SQLEOF
+CREATE SCHEMA IF NOT EXISTS users_schema;
+CREATE SCHEMA IF NOT EXISTS orders_schema;
+CREATE SCHEMA IF NOT EXISTS notifications_schema;
+
+GRANT ALL PRIVILEGES ON SCHEMA users_schema TO ${var.db_username};
+GRANT ALL PRIVILEGES ON SCHEMA orders_schema TO ${var.db_username};
+GRANT ALL PRIVILEGES ON SCHEMA notifications_schema TO ${var.db_username};
+
+ALTER DATABASE ${var.db_name} SET search_path TO users_schema, orders_schema, notifications_schema, public;
+SQLEOF
     
-    GRANT ALL PRIVILEGES ON SCHEMA users_schema TO ${var.db_username};
-    GRANT ALL PRIVILEGES ON SCHEMA orders_schema TO ${var.db_username};
-    GRANT ALL PRIVILEGES ON SCHEMA notifications_schema TO ${var.db_username};
-    
-    ALTER DATABASE ${var.db_name} SET search_path TO users_schema, orders_schema, notifications_schema, public;
-    SQLEOF
-    
-    # Create docker-compose.yml
-    cat > docker-compose.yml << 'COMPOSEEOF'
-    version: '3.8'
-    services:
-      postgres:
-        image: postgres:17.2-alpine
-        container_name: postgres-db
-        restart: unless-stopped
-        ports:
-          - "5432:5432"
-        environment:
-          POSTGRES_DB: ${var.db_name}
-          POSTGRES_USER: ${var.db_username}
-          POSTGRES_PASSWORD: ${var.db_password}
-          POSTGRES_INITDB_ARGS: "--encoding=UTF-8"
-        volumes:
-          - postgres_data:/var/lib/postgresql/data
-          - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
-        healthcheck:
-          test: ["CMD-SHELL", "pg_isready -U ${var.db_username} -d ${var.db_name}"]
-          interval: 10s
-          timeout: 5s
-          retries: 5
+    # Create docker-compose.yml (using cat without quotes to allow variable expansion)
+    cat > docker-compose.yml << COMPOSEEOF
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:17.2-alpine
+    container_name: postgres-db
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: ${var.db_name}
+      POSTGRES_USER: ${var.db_username}
+      POSTGRES_PASSWORD: ${var.db_password}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8"
     volumes:
-      postgres_data:
-        driver: local
-    COMPOSEEOF
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${var.db_username} -d ${var.db_name}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+    driver: local
+COMPOSEEOF
+    
+    # Display configuration files for verification
+    echo "=== init-db.sql ==="
+    cat init-db.sql
+    echo "=== docker-compose.yml ==="
+    cat docker-compose.yml
     
     # Start PostgreSQL
+    echo "[6/6] Starting PostgreSQL with Docker Compose..."
     /usr/local/bin/docker-compose pull
-    /usr/local/bin/docker-compose up -d
+    if [ $? -ne 0 ]; then
+      echo "ERROR: Failed to pull PostgreSQL image"
+      exit 1
+    fi
     
+    /usr/local/bin/docker-compose up -d
+    if [ $? -ne 0 ]; then
+      echo "ERROR: Failed to start PostgreSQL"
+      /usr/local/bin/docker-compose logs
+      exit 1
+    fi
+    
+    # Wait and verify
+    echo "Waiting for PostgreSQL to be ready..."
     sleep 30
+    
+    echo "=== Docker containers status ==="
+    docker ps -a
+    echo "=== Docker Compose status ==="
     /usr/local/bin/docker-compose ps
+    echo "=== PostgreSQL logs (last 20 lines) ==="
+    /usr/local/bin/docker-compose logs --tail=20
     
     echo "=========================================="
-    echo "PostgreSQL setup completed!"
+    echo "PostgreSQL setup completed successfully!"
+    echo "Database URL: $(hostname -I | awk '{print $1}'):5432"
+    echo "Database Name: ${var.db_name}"
     echo "Time: $(date)"
     echo "=========================================="
     EOF
