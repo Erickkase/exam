@@ -50,7 +50,7 @@ public class UserService {
         
         if (!user.getEmail().equals(request.getEmail()) && 
             userRepository.existsByEmail(request.getEmail())) {
-            throw new RuntimeException("Email already exists " + request.getEmail());
+            throw new RuntimeException("Email already exists: " + request.getEmail());
         }
         
         user.setName(request.getName());

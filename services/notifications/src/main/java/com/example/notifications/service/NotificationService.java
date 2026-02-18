@@ -36,7 +36,7 @@ public class NotificationService {
     
     public NotificationResponseDTO getNotificationById(Long id) {
         Notification notification = notificationRepository.findById(id)
-            .orElseThrow(() -> new RuntimeException("Notification not found with id " + id));
+            .orElseThrow(() -> new RuntimeException("Notification not found with id: " + id));
         return NotificationResponseDTO.fromEntity(notification);
     }
     

@@ -144,14 +144,14 @@ resource "aws_db_subnet_group" "postgres_subnet_group" {
 resource "aws_db_instance" "postgres" {
   identifier             = "microservicios-db"
   engine                 = "postgres"
-  engine_version         = "16.4"
-  instance_class         = "db.t3.micro"
+  engine_version         = "17.6-R2"
+  instance_class         = "db.t4g.micro"
   allocated_storage      = 20
   storage_type           = "gp2"
   db_name                = var.db_name
   username               = var.db_username
   password               = var.db_password
-  parameter_group_name   = "default.postgres16"
+  parameter_group_name   = "default.postgres17"
   db_subnet_group_name   = aws_db_subnet_group.postgres_subnet_group.name
   vpc_security_group_ids = [aws_security_group.rds_sg.id]
   publicly_accessible    = false
@@ -160,7 +160,8 @@ resource "aws_db_instance" "postgres" {
   backup_retention_period = 7
   
   tags = {
-    Name = "microservicios-postgres-db"
+    Name = "microservicios-postgres-db-test"
+    Environment = "test"
   }
 }
 

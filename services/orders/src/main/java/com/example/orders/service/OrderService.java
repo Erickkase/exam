@@ -44,7 +44,7 @@ public class OrderService {
     
     public OrderResponseDTO getOrderById(Long id) {
         Order order = orderRepository.findById(id)
-            .orElseThrow(() -> new RuntimeException("Order not found with id " + id));
+            .orElseThrow(() -> new RuntimeException("Order not found with id: " + id));
         return OrderResponseDTO.fromEntity(order);
     }
     
