@@ -162,7 +162,7 @@ resource "aws_instance" "postgres" {
   
   vpc_security_group_ids = [aws_security_group.postgres_sg.id]
   
-  user_data = base64encode(templatefile("$${path.module}/user-data-postgres.sh", {
+  user_data = base64encode(templatefile("${path.module}/user-data-postgres.sh", {
     db_name     = var.db_name
     db_username = var.db_username
     db_password = var.db_password
