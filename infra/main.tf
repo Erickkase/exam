@@ -163,58 +163,58 @@ resource "aws_instance" "postgres" {
   vpc_security_group_ids = [aws_security_group.postgres_sg.id]
   
   user_data = base64encode(<<-EOF
-    #!/bin/bash
-    exec > >(tee /var/log/user-data.log)
-    exec 2>&1
-    set -x
-    
-    echo "=========================================="
-    echo "Starting PostgreSQL instance setup..."
-    echo "Time: $(date)"
-    echo "=========================================="
-    
-    # Update system
-    echo "[1/6] Updating system..."
-    apt-get update -y
-    
-    # Install Docker
-    echo "[2/6] Installing Docker..."
-    apt-get install -y docker.io
-    if [ $? -ne 0 ]; then
-      echo "ERROR: Failed to install Docker"
-      exit 1
-    fi
-    
-    # Start Docker service
-    echo "[3/6] Starting Docker service..."
-    systemctl start docker
-    systemctl enable docker
-    sleep 5
-    
-    # Verify Docker is running
-    if ! docker ps > /dev/null 2>&1; then
-      echo "ERROR: Docker is not running properly"
-      systemctl status docker
-      exit 1
-    fi
-    
-    usermod -aG docker ubuntu
-    docker --version
-    echo "Docker installed and running successfully!"
-    
-    # Install Docker Compose
-    echo "[4/6] Installing Docker Compose..."
-    curl -L "https://github.com/docker/compose/releases/download/v2.24.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-    chmod +x /usr/local/bin/docker-compose
-    /usr/local/bin/docker-compose --version
-    
-    # Create PostgreSQL directory
-    echo "[5/6] Creating PostgreSQL configuration..."
-    mkdir -p /opt/postgres
-    cd /opt/postgres
-    
-    # Create init SQL file (using cat without quotes to allow variable expansion)
-    cat > init-db.sql << SQLEOF
+#!/bin/bash
+exec > >(tee /var/log/user-data.log)
+exec 2>&1
+set -x
+
+echo "=========================================="
+echo "Starting PostgreSQL instance setup..."
+echo "Time: $(date)"
+echo "=========================================="
+
+# Update system
+echo "[1/6] Updating system..."
+apt-get update -y
+
+# Install Docker
+echo "[2/6] Installing Docker..."
+apt-get install -y docker.io
+if [ $? -ne 0 ]; then
+  echo "ERROR: Failed to install Docker"
+  exit 1
+fi
+
+# Start Docker service
+echo "[3/6] Starting Docker service..."
+systemctl start docker
+systemctl enable docker
+sleep 5
+
+# Verify Docker is running
+if ! docker ps > /dev/null 2>&1; then
+  echo "ERROR: Docker is not running properly"
+  systemctl status docker
+  exit 1
+fi
+
+usermod -aG docker ubuntu
+docker --version
+echo "Docker installed and running successfully!"
+
+# Install Docker Compose
+echo "[4/6] Installing Docker Compose..."
+curl -L "https://github.com/docker/compose/releases/download/v2.24.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+chmod +x /usr/local/bin/docker-compose
+/usr/local/bin/docker-compose --version
+
+# Create PostgreSQL directory
+echo "[5/6] Creating PostgreSQL configuration..."
+mkdir -p /opt/postgres
+cd /opt/postgres
+
+# Create init SQL file (using cat without quotes to allow variable expansion)
+cat > init-db.sql << SQLEOF
 CREATE SCHEMA IF NOT EXISTS users_schema;
 CREATE SCHEMA IF NOT EXISTS orders_schema;
 CREATE SCHEMA IF NOT EXISTS notifications_schema;
@@ -225,9 +225,9 @@ GRANT ALL PRIVILEGES ON SCHEMA notifications_schema TO ${var.db_username};
 
 ALTER DATABASE ${var.db_name} SET search_path TO users_schema, orders_schema, notifications_schema, public;
 SQLEOF
-    
-    # Create docker-compose.yml (using cat without quotes to allow variable expansion)
-    cat > docker-compose.yml << COMPOSEEOF
+
+# Create docker-compose.yml (using cat without quotes to allow variable expansion)
+cat > docker-compose.yml << COMPOSEEOF
 version: '3.8'
 
 services:
@@ -263,65 +263,65 @@ volumes:
   postgres_data:
     driver: local
 COMPOSEEOF
-    
-    # Display configuration files for verification
-    echo "=== init-db.sql ==="
-    cat init-db.sql
-    echo "=== docker-compose.yml ==="
-    cat docker-compose.yml
-    
-    # Start PostgreSQL
-    echo "[6/6] Starting PostgreSQL with Docker Compose..."
-    /usr/local/bin/docker-compose pull
-    if [ $? -ne 0 ]; then
-      echo "ERROR: Failed to pull PostgreSQL image"
-      exit 1
-    fi
-    
-    /usr/local/bin/docker-compose up -d
-    if [ $? -ne 0 ]; then
-      echo "ERROR: Failed to start PostgreSQL"
-      /usr/local/bin/docker-compose logs
-      exit 1
-    fi
-    
-    # Wait and verify PostgreSQL is fully ready
-    echo "Waiting for PostgreSQL to be fully ready..."
-    sleep 30
-    
-    # Check if container is running
-    if ! docker ps | grep postgres-db; then
-      echo "ERROR: PostgreSQL container is not running!"
-      docker ps -a
-      /usr/local/bin/docker-compose logs
-      exit 1
-    fi
-    
-    # Wait for PostgreSQL to accept connections (up to 2 minutes)
-    echo "Checking PostgreSQL connectivity..."
-    for i in {1..24}; do
-      if docker exec postgres-db pg_isready -U ${var.db_username} -d ${var.db_name} > /dev/null 2>&1; then
-        echo "PostgreSQL is ready and accepting connections!"
-        break
-      fi
-      echo "Attempt $i/24: Waiting for PostgreSQL to accept connections..."
-      sleep 5
-    done
-    
-    echo "=== Docker containers status ==="
-    docker ps -a
-    echo "=== Docker Compose status ==="
-    /usr/local/bin/docker-compose ps
-    echo "=== PostgreSQL logs (last 20 lines) ==="
-    /usr/local/bin/docker-compose logs --tail=20
-    
-    echo "=========================================="
-    echo "PostgreSQL setup completed successfully!"
-    echo "Database URL: $(hostname -I | awk '{print $1}'):5432"
-    echo "Database Name: ${var.db_name}"
-    echo "Time: $(date)"
-    echo "=========================================="
-    EOF
+
+# Display configuration files for verification
+echo "=== init-db.sql ==="
+cat init-db.sql
+echo "=== docker-compose.yml ==="
+cat docker-compose.yml
+
+# Start PostgreSQL
+echo "[6/6] Starting PostgreSQL with Docker Compose..."
+/usr/local/bin/docker-compose pull
+if [ $? -ne 0 ]; then
+  echo "ERROR: Failed to pull PostgreSQL image"
+  exit 1
+fi
+
+/usr/local/bin/docker-compose up -d
+if [ $? -ne 0 ]; then
+  echo "ERROR: Failed to start PostgreSQL"
+  /usr/local/bin/docker-compose logs
+  exit 1
+fi
+
+# Wait and verify PostgreSQL is fully ready
+echo "Waiting for PostgreSQL to be fully ready..."
+sleep 30
+
+# Check if container is running
+if ! docker ps | grep postgres-db; then
+  echo "ERROR: PostgreSQL container is not running!"
+  docker ps -a
+  /usr/local/bin/docker-compose logs
+  exit 1
+fi
+
+# Wait for PostgreSQL to accept connections (up to 2 minutes)
+echo "Checking PostgreSQL connectivity..."
+for i in {1..24}; do
+  if docker exec postgres-db pg_isready -U ${var.db_username} -d ${var.db_name} > /dev/null 2>&1; then
+    echo "PostgreSQL is ready and accepting connections!"
+    break
+  fi
+  echo "Attempt $i/24: Waiting for PostgreSQL to accept connections..."
+  sleep 5
+done
+
+echo "=== Docker containers status ==="
+docker ps -a
+echo "=== Docker Compose status ==="
+/usr/local/bin/docker-compose ps
+echo "=== PostgreSQL logs (last 20 lines) ==="
+/usr/local/bin/docker-compose logs --tail=20
+
+echo "=========================================="
+echo "PostgreSQL setup completed successfully!"
+echo "Database URL: $(hostname -I | awk '{print $1}'):5432"
+echo "Database Name: ${var.db_name}"
+echo "Time: $(date)"
+echo "=========================================="
+EOF
   )
   
   root_block_device {
