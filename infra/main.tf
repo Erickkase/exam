@@ -99,11 +99,11 @@ resource "aws_security_group" "microservices_sg" {
   }
 }
 
-# Security Group para RDS PostgreSQL
-resource "aws_security_group" "rds_sg" {
-  name_prefix = "microservicios-rds-sg"
+# Security Group for PostgreSQL EC2 Instance
+resource "aws_security_group" "postgres_sg" {
+  name_prefix = "postgres-db-sg"
   vpc_id      = var.vpc_id
-  description = "Security group for PostgreSQL RDS"
+  description = "Security group for PostgreSQL EC2 instance"
 
   ingress {
     from_port       = 5432
@@ -111,6 +111,14 @@ resource "aws_security_group" "rds_sg" {
     protocol        = "tcp"
     security_groups = [aws_security_group.microservices_sg.id]
     description     = "PostgreSQL from microservices"
+  }
+
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "SSH access"
   }
 
   egress {
@@ -122,45 +130,53 @@ resource "aws_security_group" "rds_sg" {
   }
 
   tags = {
-    Name = "microservicios-rds-sg"
+    Name = "postgres-db-sg"
   }
 }
 
 # ============================================================
-# RDS POSTGRESQL DATABASE
+# POSTGRESQL DATABASE EC2 INSTANCE
 # ============================================================
 
-# DB Subnet Group
-resource "aws_db_subnet_group" "postgres_subnet_group" {
-  name       = "microservicios-db-subnet-group"
-  subnet_ids = [var.subnet1, var.subnet2]
+# Key Pair for PostgreSQL Instance
+resource "tls_private_key" "postgres_key" {
+  algorithm = "RSA"
+  rsa_bits  = 4096
+}
 
-  tags = {
-    Name = "microservicios-db-subnet-group"
+resource "aws_key_pair" "postgres" {
+  key_name   = "postgres-db-key"
+  public_key = tls_private_key.postgres_key.public_key_openssh
+  
+  lifecycle {
+    ignore_changes = [public_key]
   }
 }
 
-# RDS PostgreSQL Instance
-resource "aws_db_instance" "postgres" {
-  identifier             = "microservicios-db"
-  engine                 = "postgres"
-  engine_version         = "17.6-R2"
-  instance_class         = "db.t4g.micro"
-  allocated_storage      = 20
-  storage_type           = "gp2"
-  db_name                = var.db_name
-  username               = var.db_username
-  password               = var.db_password
-  parameter_group_name   = "default.postgres17"
-  db_subnet_group_name   = aws_db_subnet_group.postgres_subnet_group.name
-  vpc_security_group_ids = [aws_security_group.rds_sg.id]
-  publicly_accessible    = false
-  skip_final_snapshot    = true
-  multi_az               = false
-  backup_retention_period = 7
+# PostgreSQL EC2 Instance (Single instance for database)
+resource "aws_instance" "postgres" {
+  ami           = var.ami_id
+  instance_type = "t2.small"
+  key_name      = aws_key_pair.postgres.key_name
+  subnet_id     = var.subnet1
+  
+  vpc_security_group_ids = [aws_security_group.postgres_sg.id]
+  
+  user_data = base64encode(templatefile("$${path.module}/user-data-postgres.sh", {
+    db_name     = var.db_name
+    db_username = var.db_username
+    db_password = var.db_password
+  }))
+  
+  root_block_device {
+    volume_type = "gp2"
+    volume_size = 20
+    encrypted   = false
+  }
   
   tags = {
-    Name = "microservicios-postgres-db-test"
+    Name        = "postgres-database"
+    Service     = "database"
     Environment = "test"
   }
 }
@@ -407,7 +423,7 @@ resource "aws_launch_template" "ms_users_lt" {
 
   user_data = base64encode(templatefile("${path.module}/user-data-users.sh", {
     docker_image     = "${var.docker_hub_username}/ms-users:${var.image_tag}"
-    db_url           = "jdbc:postgresql://${aws_db_instance.postgres.endpoint}/${var.db_name}?currentSchema=users_schema"
+    db_url           = "jdbc:postgresql://$${aws_instance.postgres.private_ip}:5432/$${var.db_name}?currentSchema=users_schema"
     db_username      = var.db_username
     db_password      = var.db_password
     db_name          = var.db_name
@@ -433,7 +449,7 @@ resource "aws_launch_template" "ms_orders_lt" {
 
   user_data = base64encode(templatefile("${path.module}/user-data-orders.sh", {
     docker_image     = "${var.docker_hub_username}/ms-orders:${var.image_tag}"
-    db_url           = "jdbc:postgresql://${aws_db_instance.postgres.endpoint}/${var.db_name}?currentSchema=orders_schema"
+    db_url           = "jdbc:postgresql://$${aws_instance.postgres.private_ip}:5432/$${var.db_name}?currentSchema=orders_schema"
     db_username      = var.db_username
     db_password      = var.db_password
     users_service_url = "http://${aws_lb.main_alb.dns_name}/api/users"
@@ -459,7 +475,7 @@ resource "aws_launch_template" "ms_notifications_lt" {
 
   user_data = base64encode(templatefile("${path.module}/user-data-notifications.sh", {
     docker_image     = "${var.docker_hub_username}/ms-notifications:${var.image_tag}"
-    db_url           = "jdbc:postgresql://${aws_db_instance.postgres.endpoint}/${var.db_name}?currentSchema=notifications_schema"
+    db_url           = "jdbc:postgresql://$${aws_instance.postgres.private_ip}:5432/$${var.db_name}?currentSchema=notifications_schema"
     db_username      = var.db_username
     db_password      = var.db_password
   }))

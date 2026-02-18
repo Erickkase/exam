@@ -14,21 +14,9 @@ usermod -aG docker ec2-user
 # Pull Docker image
 docker pull ${docker_image}
 
-# Create init-db.sql for schema creation
-cat > /tmp/init-db.sql << 'EOF'
-CREATE SCHEMA IF NOT EXISTS users_schema;
-CREATE SCHEMA IF NOT EXISTS orders_schema;
-CREATE SCHEMA IF NOT EXISTS notifications_schema;
-
-GRANT ALL PRIVILEGES ON SCHEMA users_schema TO ${db_username};
-GRANT ALL PRIVILEGES ON SCHEMA orders_schema TO ${db_username};
-GRANT ALL PRIVILEGES ON SCHEMA notifications_schema TO ${db_username};
-
-ALTER DATABASE ${db_name} SET search_path TO users_schema, orders_schema, notifications_schema, public;
-EOF
-
-# Wait for RDS to be available (simple wait)
-sleep 30
+# Wait for PostgreSQL to be available
+echo "Waiting for PostgreSQL to be ready..."
+sleep 45
 
 # Run ms-users container
 docker run -d \

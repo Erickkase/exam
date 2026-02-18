@@ -12,14 +12,19 @@ output "alb_url" {
   value       = "http://${aws_lb.main_alb.dns_name}"
 }
 
-output "rds_endpoint" {
-  description = "Endpoint de la base de datos PostgreSQL"
-  value       = aws_db_instance.postgres.endpoint
+output "postgres_private_ip" {
+  description = "Private IP of the PostgreSQL EC2 instance"
+  value       = aws_instance.postgres.private_ip
 }
 
-output "rds_database_name" {
-  description = "Nombre de la base de datos"
-  value       = aws_db_instance.postgres.db_name
+output "postgres_instance_id" {
+  description = "Instance ID of the PostgreSQL server"
+  value       = aws_instance.postgres.id
+}
+
+output "postgres_database_name" {
+  description = "Database name"
+  value       = var.db_name
 }
 
 # ms-users outputs
@@ -83,21 +88,21 @@ output "ms_orders_private_key" {
   sensitive   = true
 }
 
-output "ms_notifications_private_key" {
-  description = "Private key para SSH a ms-notifications instances"
-  value       = tls_private_key.ms_notifications_key.private_key_pem
+output "postgres_private_key" {
+  description = "Private key for SSH to PostgreSQL instance"
+  value       = tls_private_key.postgres_key.private_key_pem
   sensitive   = true
 }
 
 # Summary
 output "deployment_summary" {
-  description = "Resumen del deployment"
+  description = "Deployment summary"
   value = {
-    alb_url              = "http://${aws_lb.main_alb.dns_name}"
-    ms_users_url         = "http://${aws_lb.main_alb.dns_name}/api/users"
-    ms_orders_url        = "http://${aws_lb.main_alb.dns_name}/api/orders"
-    ms_notifications_url = "http://${aws_lb.main_alb.dns_name}/api/notifications"
-    database_endpoint    = aws_db_instance.postgres.endpoint
-    database_name        = aws_db_instance.postgres.db_name
+    alb_url              = "http://$${aws_lb.main_alb.dns_name}"
+    ms_users_url         = "http://$${aws_lb.main_alb.dns_name}/api/users"
+    ms_orders_url        = "http://$${aws_lb.main_alb.dns_name}/api/orders"
+    ms_notifications_url = "http://$${aws_lb.main_alb.dns_name}/api/notifications"
+    database_private_ip  = aws_instance.postgres.private_ip
+    database_name        = var.db_name
   }
 }
