@@ -1,27 +1,62 @@
 #!/bin/bash
 # User Data Script for PostgreSQL Database Instance
-set -e
+# Redirect all output to log file for debugging
+exec > >(tee /var/log/user-data.log)
+exec 2>&1
+
+set -x  # Print commands as they execute
+
+echo "========================================"
+echo "Starting PostgreSQL instance setup..."
+echo "Time: $(date)"
+echo "========================================"
 
 # Update system
-yum update -y
+echo "[1/7] Updating system..."
+yum update -y || echo "Warning: yum update failed but continuing..."
 
 # Install Docker
+echo "[2/7] Installing Docker..."
 yum install -y docker
+if [ $? -ne 0 ]; then
+  echo "ERROR: Failed to install Docker"
+  exit 1
+fi
+
+# Start and enable Docker
+echo "[3/7] Starting Docker service..."
 systemctl start docker
 systemctl enable docker
+systemctl status docker
+
+# Wait for Docker daemon to be ready
+echo "Waiting for Docker daemon..."
+sleep 5
+
+# Verify Docker is running
+if ! docker ps > /dev/null 2>&1; then
+  echo "ERROR: Docker is not running properly"
+  systemctl status docker
+  exit 1
+fi
+
 usermod -aG docker ec2-user
+echo "Docker installed successfully"
 
 # Install Docker Compose
+echo "[4/7] Installing Docker Compose..."
 curl -L "https://github.com/docker/compose/releases/download/v2.24.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
 chmod +x /usr/local/bin/docker-compose
-ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose
+docker-compose --version || echo "Warning: docker-compose version check failed"
 
 # Create directory for PostgreSQL
+echo "[5/7] Creating PostgreSQL directory..."
 mkdir -p /opt/postgres
 cd /opt/postgres
 
-# Create init-db.sql for schema creation
-cat > init-db.sql << 'EOF'
+# Create init-db.sql for schema creation (using double quotes for variable expansion)
+echo "[6/7] Creating init-db.sql..."
+cat > init-db.sql << EOF
 -- Create schemas for microservices
 CREATE SCHEMA IF NOT EXISTS users_schema;
 CREATE SCHEMA IF NOT EXISTS orders_schema;
@@ -37,7 +72,8 @@ ALTER DATABASE ${db_name} SET search_path TO users_schema, orders_schema, notifi
 EOF
 
 # Create docker-compose.yml
-cat > docker-compose.yml << 'EOF'
+echo "Creating docker-compose.yml..."
+cat > docker-compose.yml << EOF
 version: '3.8'
 
 services:
@@ -66,18 +102,33 @@ volumes:
     driver: local
 EOF
 
-# Create .env file
-cat > .env << EOF
-DB_NAME=${db_name}
-DB_USERNAME=${db_username}
-DB_PASSWORD=${db_password}
-EOF
+echo "Configuration files created successfully"
 
 # Start PostgreSQL with Docker Compose
+echo "[7/7] Starting PostgreSQL with Docker Compose..."
+docker-compose pull
 docker-compose up -d
+
+if [ $? -ne 0 ]; then
+  echo "ERROR: Failed to start PostgreSQL"
+  docker-compose logs
+  exit 1
+fi
 
 # Wait for PostgreSQL to be ready
 echo "Waiting for PostgreSQL to be ready..."
+sleep 30
+
+# Check PostgreSQL status
+echo "PostgreSQL container status:"
+docker-compose ps
+docker-compose logs --tail=50
+
+echo "========================================"
+echo "PostgreSQL setup completed successfully!"
+echo "Database accessible at: $(hostname -I | awk '{print $1}'):5432"
+echo "Time: $(date)"
+echo "========================================"
 sleep 30
 
 # Check if PostgreSQL is running
