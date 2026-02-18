@@ -1,0 +1,437 @@
+name: CI/CD Microservicios - Docker Build & AWS Deploy
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+      - qa
+    paths:
+      - 'services/**'
+      - 'infra/**'
+      - '.github/workflows/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  # ============================================================
+  # JOB 1: DETECTAR CAMBIOS Y CONSTRUIR IMÁGENES DOCKER
+  # ============================================================
+  build-and-push:
+    name: Build & Push Docker Images
+    runs-on: ubuntu-latest
+    outputs:
+      users-changed: ${{ steps.changes.outputs.users-changed }}
+      orders-changed: ${{ steps.changes.outputs.orders-changed }}
+      notifications-changed: ${{ steps.changes.outputs.notifications-changed }}
+      any-service-changed: ${{ steps.changes.outputs.any-service-changed }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed services
+        id: changes
+        run: |
+          # Detectar cambios en servicios
+          CHANGED_FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} || echo "")
+          
+          USERS_CHANGED=false
+          ORDERS_CHANGED=false
+          NOTIFICATIONS_CHANGED=false
+          
+          if echo "$CHANGED_FILES" | grep -q '^services/users/'; then
+            USERS_CHANGED=true
+            echo "✅ Cambios detectados en ms-users"
+          fi
+          
+          if echo "$CHANGED_FILES" | grep -q '^services/orders/'; then
+            ORDERS_CHANGED=true
+            echo "✅ Cambios detectados en ms-orders"
+          fi
+          
+          if echo "$CHANGED_FILES" | grep -q '^services/notifications/'; then
+            NOTIFICATIONS_CHANGED=true
+            echo "✅ Cambios detectados en ms-notifications"
+          fi
+          
+          # Si es workflow_dispatch, construir todo
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            USERS_CHANGED=true
+            ORDERS_CHANGED=true
+            NOTIFICATIONS_CHANGED=true
+            echo "🔄 Manual trigger - Building all services"
+          fi
+          
+          ANY_CHANGED=false
+          if [ "$USERS_CHANGED" == "true" ] || [ "$ORDERS_CHANGED" == "true" ] || [ "$NOTIFICATIONS_CHANGED" == "true" ]; then
+            ANY_CHANGED=true
+          fi
+          
+          echo "users-changed=$USERS_CHANGED" >> $GITHUB_OUTPUT
+          echo "orders-changed=$ORDERS_CHANGED" >> $GITHUB_OUTPUT
+          echo "notifications-changed=$NOTIFICATIONS_CHANGED" >> $GITHUB_OUTPUT
+          echo "any-service-changed=$ANY_CHANGED" >> $GITHUB_OUTPUT
+
+      - name: Set up Docker Buildx
+        if: steps.changes.outputs.any-service-changed == 'true'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        if: steps.changes.outputs.any-service-changed == 'true'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+      # Build ms-users
+      - name: Build and push ms-users
+        if: steps.changes.outputs.users-changed == 'true'
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services/users
+          file: ./services/users/Dockerfile
+          push: true
+          tags: |
+            ${{ secrets.DOCKER_HUB_USERNAME }}/ms-users:latest
+            ${{ secrets.DOCKER_HUB_USERNAME }}/ms-users:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false
+          sbom: false
+
+      # Build ms-orders
+      - name: Build and push ms-orders
+        if: steps.changes.outputs.orders-changed == 'true'
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services/orders
+          file: ./services/orders/Dockerfile
+          push: true
+          tags: |
+            ${{ secrets.DOCKER_HUB_USERNAME }}/ms-orders:latest
+            ${{ secrets.DOCKER_HUB_USERNAME }}/ms-orders:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false
+          sbom: false
+
+      # Build ms-notifications
+      - name: Build and push ms-notifications
+        if: steps.changes.outputs.notifications-changed == 'true'
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services/notifications
+          file: ./services/notifications/Dockerfile
+          push: true
+          tags: |
+            ${{ secrets.DOCKER_HUB_USERNAME }}/ms-notifications:latest
+            ${{ secrets.DOCKER_HUB_USERNAME }}/ms-notifications:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false
+          sbom: false
+
+      - name: Build summary
+        if: steps.changes.outputs.any-service-changed == 'true'
+        run: |
+          echo "## 🐳 Docker Build Summary"
+          echo "- ms-users: ${{ steps.changes.outputs.users-changed }}"
+          echo "- ms-orders: ${{ steps.changes.outputs.orders-changed }}"
+          echo "- ms-notifications: ${{ steps.changes.outputs.notifications-changed }}"
+
+  # ============================================================
+  # JOB 2: DEPLOY A AWS CON TERRAFORM
+  # ============================================================
+  deploy-to-aws:
+    name: Deploy to AWS
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    if: needs.build-and-push.outputs.any-service-changed == 'true'
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: ./infra
+    outputs:
+      users-asg: ${{ steps.get-asgs.outputs.users-asg }}
+      orders-asg: ${{ steps.get-asgs.outputs.orders-asg }}
+      notifications-asg: ${{ steps.get-asgs.outputs.notifications-asg }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.8.5
+          terraform_wrapper: false
+
+      - name: Initialize Terraform
+        run: terraform init -migrate-state
+
+      - name: Validate Terraform
+        run: terraform validate
+
+      - name: Format Terraform
+        run: terraform fmt -recursive
+
+      - name: Plan Terraform
+        run: |
+          terraform plan \
+            -var="AWS_REGION=${{ secrets.AWS_REGION }}" \
+            -var="AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}" \
+            -var="AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}" \
+            -var="AWS_SESSION_TOKEN=${{ secrets.AWS_SESSION_TOKEN }}" \
+            -var="vpc_id=${{ secrets.VPC_ID }}" \
+            -var="subnet1=${{ secrets.SUBNET1 }}" \
+            -var="subnet2=${{ secrets.SUBNET2 }}" \
+            -var="docker_hub_username=${{ secrets.DOCKER_HUB_USERNAME }}" \
+            -var="image_tag=latest" \
+            -var="db_username=${{ secrets.DB_USERNAME }}" \
+            -var="db_password=${{ secrets.DB_PASSWORD }}"
+
+      - name: Apply Terraform
+        id: apply
+        run: |
+          terraform apply -auto-approve \
+            -var="AWS_REGION=${{ secrets.AWS_REGION }}" \
+            -var="AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}" \
+            -var="AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}" \
+            -var="AWS_SESSION_TOKEN=${{ secrets.AWS_SESSION_TOKEN }}" \
+            -var="vpc_id=${{ secrets.VPC_ID }}" \
+            -var="subnet1=${{ secrets.SUBNET1 }}" \
+            -var="subnet2=${{ secrets.SUBNET2 }}" \
+            -var="docker_hub_username=${{ secrets.DOCKER_HUB_USERNAME }}" \
+            -var="image_tag=latest" \
+            -var="db_username=${{ secrets.DB_USERNAME }}" \
+            -var="db_password=${{ secrets.DB_PASSWORD }}"
+
+      - name: Get Auto Scaling Group names
+        id: get-asgs
+        run: |
+          USERS_ASG=$(terraform output -raw ms_users_asg_name || echo "ms-users-asg")
+          ORDERS_ASG=$(terraform output -raw ms_orders_asg_name || echo "ms-orders-asg")
+          NOTIFICATIONS_ASG=$(terraform output -raw ms_notifications_asg_name || echo "ms-notifications-asg")
+          
+          echo "users-asg=$USERS_ASG" >> $GITHUB_OUTPUT
+          echo "orders-asg=$ORDERS_ASG" >> $GITHUB_OUTPUT
+          echo "notifications-asg=$NOTIFICATIONS_ASG" >> $GITHUB_OUTPUT
+
+      - name: Show Terraform Outputs
+        run: |
+          echo "## 🚀 Deployment Summary"
+          terraform output deployment_summary
+
+  # ============================================================
+  # JOB 3: TRACKEAR Y ACTUALIZAR INSTANCIAS
+  # ============================================================
+  refresh-instances:
+    name: Refresh Changed Service Instances
+    runs-on: ubuntu-latest
+    needs: [build-and-push, deploy-to-aws]
+    if: needs.build-and-push.outputs.any-service-changed == 'true'
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS CLI
+        run: |
+          aws configure set aws_access_key_id ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws configure set aws_secret_access_key ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws configure set aws_session_token ${{ secrets.AWS_SESSION_TOKEN }}
+          aws configure set region ${{ secrets.AWS_REGION }}
+
+      - name: Get current instances
+        id: get-instances
+        run: |
+          echo "## 📋 Current Instances" > instance-report.txt
+          
+          # Get all ASG instances
+          USERS_INSTANCES=$(aws autoscaling describe-auto-scaling-groups \
+            --auto-scaling-group-names ${{ needs.deploy-to-aws.outputs.users-asg }} \
+            --region ${{ secrets.AWS_REGION }} \
+            --query "AutoScalingGroups[0].Instances[].InstanceId" \
+            --output text || echo "")
+          
+          ORDERS_INSTANCES=$(aws autoscaling describe-auto-scaling-groups \
+            --auto-scaling-group-names ${{ needs.deploy-to-aws.outputs.orders-asg }} \
+            --region ${{ secrets.AWS_REGION }} \
+            --query "AutoScalingGroups[0].Instances[].InstanceId" \
+            --output text || echo "")
+          
+          NOTIFICATIONS_INSTANCES=$(aws autoscaling describe-auto-scaling-groups \
+            --auto-scaling-group-names ${{ needs.deploy-to-aws.outputs.notifications-asg }} \
+            --region ${{ secrets.AWS_REGION }} \
+            --query "AutoScalingGroups[0].Instances[].InstanceId" \
+            --output text || echo "")
+          
+          echo "ms-users: $USERS_INSTANCES" >> instance-report.txt
+          echo "ms-orders: $ORDERS_INSTANCES" >> instance-report.txt
+          echo "ms-notifications: $NOTIFICATIONS_INSTANCES" >> instance-report.txt
+          
+          cat instance-report.txt
+
+      - name: Terminate ms-users instances (if changed)
+        if: needs.build-and-push.outputs.users-changed == 'true'
+        run: |
+          echo "🔄 Terminating ms-users instances for refresh..."
+          
+          INSTANCE_IDS=$(aws autoscaling describe-auto-scaling-groups \
+            --auto-scaling-group-names ${{ needs.deploy-to-aws.outputs.users-asg }} \
+            --region ${{ secrets.AWS_REGION }} \
+            --query "AutoScalingGroups[0].Instances[].InstanceId" \
+            --output text)
+          
+          for INSTANCE_ID in $INSTANCE_IDS; do
+            echo "Terminating instance: $INSTANCE_ID"
+            aws autoscaling terminate-instance-in-auto-scaling-group \
+              --instance-id $INSTANCE_ID \
+              --no-should-decrement-desired-capacity \
+              --region ${{ secrets.AWS_REGION }}
+            
+            # Wait a bit between terminations to avoid overwhelming the ASG
+            sleep 20
+          done
+          
+          echo "✅ ms-users instances terminated. ASG will create new instances with updated image."
+
+      - name: Terminate ms-orders instances (if changed)
+        if: needs.build-and-push.outputs.orders-changed == 'true'
+        run: |
+          echo "🔄 Terminating ms-orders instances for refresh..."
+          
+          INSTANCE_IDS=$(aws autoscaling describe-auto-scaling-groups \
+            --auto-scaling-group-names ${{ needs.deploy-to-aws.outputs.orders-asg }} \
+            --region ${{ secrets.AWS_REGION }} \
+            --query "AutoScalingGroups[0].Instances[].InstanceId" \
+            --output text)
+          
+          for INSTANCE_ID in $INSTANCE_IDS; do
+            echo "Terminating instance: $INSTANCE_ID"
+            aws autoscaling terminate-instance-in-auto-scaling-group \
+              --instance-id $INSTANCE_ID \
+              --no-should-decrement-desired-capacity \
+              --region ${{ secrets.AWS_REGION }}
+            
+            sleep 20
+          done
+          
+          echo "✅ ms-orders instances terminated. ASG will create new instances with updated image."
+
+      - name: Terminate ms-notifications instances (if changed)
+        if: needs.build-and-push.outputs.notifications-changed == 'true'
+        run: |
+          echo "🔄 Terminating ms-notifications instances for refresh..."
+          
+          INSTANCE_IDS=$(aws autoscaling describe-auto-scaling-groups \
+            --auto-scaling-group-names ${{ needs.deploy-to-aws.outputs.notifications-asg }} \
+            --region ${{ secrets.AWS_REGION }} \
+            --query "AutoScalingGroups[0].Instances[].InstanceId" \
+            --output text)
+          
+          for INSTANCE_ID in $INSTANCE_IDS; do
+            echo "Terminating instance: $INSTANCE_ID"
+            aws autoscaling terminate-instance-in-auto-scaling-group \
+              --instance-id $INSTANCE_ID \
+              --no-should-decrement-desired-capacity \
+              --region ${{ secrets.AWS_REGION }}
+            
+            sleep 20
+          done
+          
+          echo "✅ ms-notifications instances terminated. ASG will create new instances with updated image."
+
+      - name: Wait for new instances to be healthy
+        run: |
+          echo "⏳ Waiting for ASG to launch new instances..."
+          sleep 60
+          
+          echo "## 🆕 New Instances Status"
+          
+          if [ "${{ needs.build-and-push.outputs.users-changed }}" == "true" ]; then
+            aws autoscaling describe-auto-scaling-groups \
+              --auto-scaling-group-names ${{ needs.deploy-to-aws.outputs.users-asg }} \
+              --region ${{ secrets.AWS_REGION }} \
+              --query "AutoScalingGroups[0].Instances[].[InstanceId,LifecycleState,HealthStatus]" \
+              --output table
+          fi
+          
+          if [ "${{ needs.build-and-push.outputs.orders-changed }}" == "true" ]; then
+            aws autoscaling describe-auto-scaling-groups \
+              --auto-scaling-group-names ${{ needs.deploy-to-aws.outputs.orders-asg }} \
+              --region ${{ secrets.AWS_REGION }} \
+              --query "AutoScalingGroups[0].Instances[].[InstanceId,LifecycleState,HealthStatus]" \
+              --output table
+          fi
+          
+          if [ "${{ needs.build-and-push.outputs.notifications-changed }}" == "true" ]; then
+            aws autoscaling describe-auto-scaling-groups \
+              --auto-scaling-group-names ${{ needs.deploy-to-aws.outputs.notifications-asg }} \
+              --region ${{ secrets.AWS_REGION }} \
+              --query "AutoScalingGroups[0].Instances[].[InstanceId,LifecycleState,HealthStatus]" \
+              --output table
+          fi
+
+      - name: Save instance tracking file
+        run: |
+          # Create instances.txt with current state
+          echo "# Instance Tracking - $(date)" > instances.txt
+          echo "# Auto-generated by GitHub Actions" >> instances.txt
+          echo "" >> instances.txt
+          
+          echo "[ms-users]" >> instances.txt
+          aws autoscaling describe-auto-scaling-groups \
+            --auto-scaling-group-names ${{ needs.deploy-to-aws.outputs.users-asg }} \
+            --region ${{ secrets.AWS_REGION }} \
+            --query "AutoScalingGroups[0].Instances[].[InstanceId,LifecycleState]" \
+            --output text >> instances.txt || echo "No instances" >> instances.txt
+          
+          echo "" >> instances.txt
+          echo "[ms-orders]" >> instances.txt
+          aws autoscaling describe-auto-scaling-groups \
+            --auto-scaling-group-names ${{ needs.deploy-to-aws.outputs.orders-asg }} \
+            --region ${{ secrets.AWS_REGION }} \
+            --query "AutoScalingGroups[0].Instances[].[InstanceId,LifecycleState]" \
+            --output text >> instances.txt || echo "No instances" >> instances.txt
+          
+          echo "" >> instances.txt
+          echo "[ms-notifications]" >> instances.txt
+          aws autoscaling describe-auto-scaling-groups \
+            --auto-scaling-group-names ${{ needs.deploy-to-aws.outputs.notifications-asg }} \
+            --region ${{ secrets.AWS_REGION }} \
+            --query "AutoScalingGroups[0].Instances[].[InstanceId,LifecycleState]" \
+            --output text >> instances.txt || echo "No instances" >> instances.txt
+          
+          cat instances.txt
+
+      - name: Commit instance tracking file
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          git add instances.txt || true
+          git commit -m "Update instance tracking [skip ci]" || echo "No changes to commit"
+          git push || echo "Nothing to push"
+
+      - name: Deployment Complete
+        run: |
+          echo "## ✅ Deployment Completed Successfully!"
+          echo "🚀 Updated services:"
+          echo "  - ms-users: ${{ needs.build-and-push.outputs.users-changed }}"
+          echo "  - ms-orders: ${{ needs.build-and-push.outputs.orders-changed }}"
+          echo "  - ms-notifications: ${{ needs.build-and-push.outputs.notifications-changed }}"
+          echo ""
+          echo "📊 Check instances.txt for current instance IDs"

@@ -1,0 +1,12 @@
+# Instance Tracking - Auto-generated
+# This file will be updated by GitHub Actions after each deployment
+# Format: InstanceID	LifecycleState
+
+[ms-users]
+# Instances will be listed here
+
+[ms-orders]
+# Instances will be listed here
+
+[ms-notifications]
+# Instances will be listed here

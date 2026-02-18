@@ -42,9 +42,35 @@ Thumbs.db
 ### Logs ###
 *.log
 logs/
+
+### Terraform ###
+**/.terraform/
+**/.terraform.lock.hcl
+**/terraform.tfstate
+**/terraform.tfstate.backup
+**/*.tfvars
+infra/.terraform/
+infra/terraform.tfstate*
+infra/.terraform.lock.hcl
+infra/main-old.tf.backup
+infra/variables-old.tf.backup
+infra/outputs-old.tf.backup
+
+### Private Keys ###
+*.pem
+*.key
+!*.pub
+
+### Instances Tracking ###
+# instances.txt is tracked by git to keep instance state
+# but you can uncomment this if you don't want to track it:
+# instances.txt
 API-EJEMPLOS.md
+CAMBIOS-REALIZADOS.md
 CRUD-BASICO.md
 DOCKER-SETUP.md
+GITHUB-SECRETS-GUIDE.md
 INICIO-RAPIDO.md
 Proyecto_Microservicios_Java_Examen.md
 README.md
+infra/ESTRUCTURA-LIMPIA.md
