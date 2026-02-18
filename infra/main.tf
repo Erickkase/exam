@@ -235,13 +235,21 @@ services:
     image: postgres:17.2-alpine
     container_name: postgres-db
     restart: unless-stopped
+    network_mode: bridge
     ports:
-      - "5432:5432"
+      - "0.0.0.0:5432:5432"
     environment:
       POSTGRES_DB: ${var.db_name}
       POSTGRES_USER: ${var.db_username}
       POSTGRES_PASSWORD: ${var.db_password}
       POSTGRES_INITDB_ARGS: "--encoding=UTF-8"
+      POSTGRES_HOST_AUTH_METHOD: "md5"
+    command: 
+      - postgres
+      - -c
+      - listen_addresses=*
+      - -c
+      - max_connections=200
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
@@ -277,9 +285,28 @@ COMPOSEEOF
       exit 1
     fi
     
-    # Wait and verify
-    echo "Waiting for PostgreSQL to be ready..."
+    # Wait and verify PostgreSQL is fully ready
+    echo "Waiting for PostgreSQL to be fully ready..."
     sleep 30
+    
+    # Check if container is running
+    if ! docker ps | grep postgres-db; then
+      echo "ERROR: PostgreSQL container is not running!"
+      docker ps -a
+      /usr/local/bin/docker-compose logs
+      exit 1
+    fi
+    
+    # Wait for PostgreSQL to accept connections (up to 2 minutes)
+    echo "Checking PostgreSQL connectivity..."
+    for i in {1..24}; do
+      if docker exec postgres-db pg_isready -U ${var.db_username} -d ${var.db_name} > /dev/null 2>&1; then
+        echo "PostgreSQL is ready and accepting connections!"
+        break
+      fi
+      echo "Attempt $i/24: Waiting for PostgreSQL to accept connections..."
+      sleep 5
+    done
     
     echo "=== Docker containers status ==="
     docker ps -a
@@ -566,12 +593,21 @@ resource "aws_launch_template" "ms_users_lt" {
     sleep 5
     usermod -aG docker ubuntu
     
-    # Pull and run ms-users container
+    # Pull ms-users container
     docker pull ${var.docker_hub_username}/ms-users:${var.image_tag}
     
-    # Wait for PostgreSQL
-    sleep 60
+    # Wait for PostgreSQL to be ready (with connectivity check)
+    echo "Waiting for PostgreSQL at ${aws_instance.postgres.private_ip}:5432..."
+    for i in {1..30}; do
+      if timeout 2 bash -c "</dev/tcp/${aws_instance.postgres.private_ip}/5432" 2>/dev/null; then
+        echo "PostgreSQL is accepting connections!"
+        break
+      fi
+      echo "Attempt $i/30: PostgreSQL not ready yet..."
+      sleep 10
+    done
     
+    # Run ms-users container
     docker run -d \
       --name ms-users \
       --restart unless-stopped \
@@ -624,12 +660,21 @@ resource "aws_launch_template" "ms_orders_lt" {
     sleep 5
     usermod -aG docker ubuntu
     
-    # Pull and run ms-orders container
+    # Pull ms-orders container
     docker pull ${var.docker_hub_username}/ms-orders:${var.image_tag}
     
-    # Wait for dependencies
-    sleep 60
+    # Wait for PostgreSQL to be ready (with connectivity check)
+    echo "Waiting for PostgreSQL at ${aws_instance.postgres.private_ip}:5432..."
+    for i in {1..30}; do
+      if timeout 2 bash -c "</dev/tcp/${aws_instance.postgres.private_ip}/5432" 2>/dev/null; then
+        echo "PostgreSQL is accepting connections!"
+        break
+      fi
+      echo "Attempt $i/30: PostgreSQL not ready yet..."
+      sleep 10
+    done
     
+    # Run ms-orders container
     docker run -d \
       --name ms-orders \
       --restart unless-stopped \
@@ -683,12 +728,21 @@ resource "aws_launch_template" "ms_notifications_lt" {
     sleep 5
     usermod -aG docker ubuntu
     
-    # Pull and run ms-notifications container
+    # Pull ms-notifications container
     docker pull ${var.docker_hub_username}/ms-notifications:${var.image_tag}
     
-    # Wait for PostgreSQL
-    sleep 60
+    # Wait for PostgreSQL to be ready (with connectivity check)
+    echo "Waiting for PostgreSQL at ${aws_instance.postgres.private_ip}:5432..."
+    for i in {1..30}; do
+      if timeout 2 bash -c "</dev/tcp/${aws_instance.postgres.private_ip}/5432" 2>/dev/null; then
+        echo "PostgreSQL is accepting connections!"
+        break
+      fi
+      echo "Attempt $i/30: PostgreSQL not ready yet..."
+      sleep 10
+    done
     
+    # Run ms-notifications container
     docker run -d \
       --name ms-notifications \
       --restart unless-stopped \
